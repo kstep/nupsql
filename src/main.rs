@@ -96,7 +96,7 @@ impl SimplePluginCommand for Psql {
 
 impl Plugin for Psql {
     fn version(&self) -> String {
-        "0.2.0".to_owned()
+        env!("CARGO_PKG_VERSION").to_owned()
     }
 
     fn commands(&self) -> Vec<Box<dyn PluginCommand<Plugin = Self>>> {
