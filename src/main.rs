@@ -60,22 +60,35 @@ impl SimplePluginCommand for Psql {
     fn signature(&self) -> Signature {
         Signature::build("psql")
             .description("Execute PostgreSQL query.")
-            .required("conn", SyntaxShape::String, "DB connection string")
+            .named(
+                "conn",
+                SyntaxShape::String,
+                "DB connection string",
+                Some('c'),
+            )
             .required("query", SyntaxShape::String, "SQL query")
     }
 
     fn run(
         &self,
         _plugin: &Self::Plugin,
-        _engine: &nu_plugin::EngineInterface,
+        engine: &nu_plugin::EngineInterface,
         call: &nu_plugin::EvaluatedCall,
         _input: &Value,
-    ) -> Result<Value, nu_protocol::LabeledError> {
-        let args = &call.positional;
-        let conn = args[0].as_str()?;
-        let query = args[1].as_str()?;
+    ) -> Result<Value, LabeledError> {
+        let query = call.positional[0].as_str()?;
+        let conn = call
+            .get_flag_value("conn")
+            .or_else(|| {
+                engine
+                    .get_plugin_config()
+                    .ok()??
+                    .get_data_by_key("DATABASE_URL")
+            })
+            .or_else(|| engine.get_env_var("DATABASE_URL").ok().flatten())
+            .ok_or_else(|| LabeledError::new("missing both `--conn` and `DATABASE_URL`"))?;
 
-        self.cmd(conn, query, call.head)
+        self.cmd(conn.as_str()?, query, call.head)
             .map(|table| Value::list(table, call.head))
             .map_err(Into::into)
     }
@@ -83,7 +96,7 @@ impl SimplePluginCommand for Psql {
 
 impl Plugin for Psql {
     fn version(&self) -> String {
-        "0.1.0".to_string()
+        "0.2.0".to_owned()
     }
 
     fn commands(&self) -> Vec<Box<dyn PluginCommand<Plugin = Self>>> {
